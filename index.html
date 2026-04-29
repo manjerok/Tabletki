@@ -19,10 +19,12 @@
   .subtitle { font-size: 12px; color: #64748b; margin-top: 2px; }
   .day-badge { background: #1e1b4b; border: 1px solid #4338ca; color: #818cf8; border-radius: 8px; padding: 4px 10px; font-size: 13px; font-weight: 600; white-space: nowrap; }
 
-  .progress-wrap { margin-bottom: 12px; }
-  .progress-bar { height: 6px; background: #1e1e30; border-radius: 3px; overflow: hidden; margin-bottom: 4px; }
+  .progress-wrap { margin-bottom: 10px; }
+  .progress-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; }
+  .progress-row-label { font-size: 11px; color: #64748b; }
+  .progress-bar { height: 5px; background: #1e1e30; border-radius: 3px; overflow: hidden; }
   .progress-fill { height: 100%; border-radius: 3px; transition: width 0.4s ease; }
-  .progress-label { font-size: 12px; color: #64748b; text-align: right; }
+  .progress-label { font-size: 11px; color: #64748b; }
 
   .tabs { display: flex; gap: 4px; }
   .tab { flex: 1; padding: 8px 0; background: transparent; border: none; border-bottom: 2px solid transparent; color: #64748b; font-size: 14px; cursor: pointer; font-weight: 600; transition: all 0.2s; }
@@ -56,7 +58,8 @@
   .day-card { background: #12121f; border: 1px solid #2a2a3e; border-radius: 10px; padding: 12px; cursor: pointer; text-align: left; transition: all 0.15s; width: 100%; }
   .day-card:active { transform: scale(0.97); }
   .day-card.active { background: #1e1b4b; border-color: #6366f1; }
-  .day-num { font-size: 13px; font-weight: 600; color: #94a3b8; margin-bottom: 2px; }
+  .day-num { font-size: 13px; font-weight: 600; color: #94a3b8; margin-bottom: 0px; }
+  .day-date { font-size: 11px; color: #475569; margin-bottom: 4px; }
   .day-pct { font-size: 22px; font-weight: 700; margin-bottom: 6px; color: #94a3b8; }
   .day-pct.complete { color: #22c55e; }
   .day-pct.missed { color: #ef4444; }
@@ -82,8 +85,16 @@
     <div class="day-badge" id="day-badge">День 1</div>
   </div>
   <div class="progress-wrap">
+    <div class="progress-row">
+      <span class="progress-row-label">📅 Сегодня</span>
+      <span class="progress-label" id="progress-label">0%</span>
+    </div>
     <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
-    <div class="progress-label" id="progress-label">0% принято</div>
+    <div class="progress-row" style="margin-top:6px">
+      <span class="progress-row-label">📋 Весь курс</span>
+      <span class="progress-label" id="course-label">0%</span>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" id="course-fill"></div></div>
   </div>
   <div class="tabs">
     <button class="tab active" id="tab-day" onclick="setView('day')">День</button>
@@ -234,7 +245,23 @@ function render() {
   const fill = document.getElementById('progress-fill');
   fill.style.width = pct + '%';
   fill.style.background = pct === 100 ? '#22c55e' : 'linear-gradient(90deg,#f97316,#6366f1)';
-  document.getElementById('progress-label').textContent = pct === 100 ? '✅ День завершён!' : pct + '% принято';
+  document.getElementById('progress-label').textContent = pct === 100 ? '✅ Готово!' : pct + '%';
+
+  // Course progress: total pills taken across ALL days vs total possible
+  let totalDone = 0;
+  let completedDays = 0;
+  for (let d = 1; d <= COURSE_DAYS; d++) {
+    const dc = appData.days[d] || {};
+    const dayDone = ALL_PILL_IDS.filter(id => dc[id]).length;
+    totalDone += dayDone;
+    if (dayDone === ALL_PILL_IDS.length) completedDays++;
+  }
+  const totalPossible = ALL_PILL_IDS.length * COURSE_DAYS;
+  const coursePct = Math.round(totalDone / totalPossible * 100);
+  const courseFill = document.getElementById('course-fill');
+  courseFill.style.width = coursePct + '%';
+  courseFill.style.background = coursePct === 100 ? '#22c55e' : '#6366f1';
+  document.getElementById('course-label').textContent = completedDays + ' / ' + COURSE_DAYS + ' дн · ' + coursePct + '%';
 
   if (currentView === 'day') renderDay();
   else renderOverview();
@@ -268,6 +295,12 @@ function renderDay() {
   document.getElementById('content').innerHTML = html;
 }
 
+function getDayDate(day) {
+  const start = new Date(appData.startDate);
+  start.setDate(start.getDate() + day - 1);
+  return start.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+}
+
 function renderOverview() {
   let html = '<div class="overview-grid">';
   for (let d = 1; d <= COURSE_DAYS; d++) {
@@ -279,8 +312,10 @@ function renderOverview() {
     const isToday = d === todayDay;
     const pctClass = pct === 100 ? 'complete' : (isPast && pct < 100 ? 'missed' : '');
     const borderColor = isActive ? '#6366f1' : pct === 100 ? '#22c55e' : isPast ? '#ef4444' : '#2a2a3e';
+    const dateStr = getDayDate(d);
     html += `<button class="day-card${isActive ? ' active' : ''}" style="border-color:${borderColor}" onclick="switchDay(${d})">
       <div class="day-num">День ${d}${isToday ? ' 📍' : ''}</div>
+      <div class="day-date">${dateStr}</div>
       <div class="day-pct ${pctClass}">${pct}%</div>
       <div class="mini-bar"><div class="mini-fill ${pctClass}" style="width:${pct}%"></div></div>
     </button>`;
