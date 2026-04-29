@@ -261,6 +261,172 @@ function render() {
   const courseFill = document.getElementById('course-fill');
   courseFill.style.width = coursePct + '%';
   courseFill.style.background = coursePct === 100 ? '#22c55e' : '#6366f1';
+  document.getElementById('course-label').textContent = coursePct + '% (' + totalDone + ' / ' + totalPossible + ' таб)';
+
+  if (currentView === 'day') renderDay();
+  else renderOverview();
+}
+
+function renderDay() {
+  const checked = getDayChecked(currentDay);
+  const dateStr = getDayDate(currentDay);
+  let html = `<div style="font-size:12px;color:#475569;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #1e1e30">📅 ${dateStr}</div>`;
+  for (const time of SCHEDULE) {
+    html += `<div class="time-block">`;
+    html += `<div class="time-label" style="color:${time.color}">${time.label}<span class="time-sub"> · ${time.sublabel}</span></div>`;
+    for (const group of time.groups) {
+      html += `<div class="group">`;
+      if (group.delay) html += `<div class="delay-badge">⏱ Через 40–60 мин</div>`;
+      for (const pill of group.pills) {
+        const done = !!checked[pill.id];
+        html += `<button class="pill-btn${done ? ' done' : ''}" onclick="togglePill('${pill.id}')">
+          <div class="pill-check">${done ? '<span class="check-done">✓</span>' : '<span class="check-empty"></span>'}</div>
+          <div class="pill-info">
+            <div class="pill-name">${pill.name}</div>
+            <div class="pill-dose">${pill.dose}</div>
+          </div>
+          <div class="pill-dot" style="background:${time.color}"></div>
+        </button>`;
+      }
+      html += `</div>`;
+    }
+    html += `</div>`;
+  }
+  html += `<button class="reset-btn" onclick="resetDay()">🔄 Сбросить день ${currentDay}</button>`;
+  document.getElementById('content').innerHTML = html;
+}
+
+function getDayDate(day) {
+  const start = new Date(appData.startDate);
+  start.setDate(start.getDate() + day - 1);
+  return start.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+}
+
+function renderOverview() {
+  let html = '<div class="overview-grid">';
+  for (let d = 1; d <= COURSE_DAYS; d++) {
+    const data = appData.days[d] || {};
+    const done = ALL_PILL_IDS.filter(id => data[id]).length;
+    const pct = Math.round(done / ALL_PILL_IDS.length * 100);
+    const isActive = d === currentDay;
+    const isPast = d < todayDay;
+    const isToday = d === todayDay;
+    const pctClass = pct === 100 ? 'complete' : (isPast && pct < 100 ? 'missed' : '');
+    const borderColor = isActive ? '#6366f1' : pct === 100 ? '#22c55e' : isPast ? '#ef4444' : '#2a2a3e';
+    const dateStr = getDayDate(d);
+    html += `<button class="day-card${isActive ? ' active' : ''}" style="border-color:${borderColor}" onclick="switchDay(${d})">
+      <div class="day-num">День ${d}${isToday ? ' 📍' : ''}</div>
+      <div class="day-date">${dateStr}</div>
+      <div class="day-pct ${pctClass}">${pct}%</div>
+      <div class="mini-bar"><div class="mini-fill ${pctClass}" style="width:${pct}%"></div></div>
+    </button>`;
+  }
+  html += '</div>';
+  document.getElementById('content').innerHTML = html;
+}
+
+// --- Actions ---
+function togglePill(id) {
+  const checked = getDayChecked(currentDay);
+  setChecked(currentDay, id, !checked[id]);
+  render();
+}
+
+function resetDay() {
+  if (confirm('Сбросить все отметки за день ' + currentDay + '?')) {
+    resetDayData(currentDay);
+    render();
+  }
+}
+
+function switchDay(day) {
+  currentDay = day;
+  currentView = 'day';
+  render();
+  window.scrollTo(0, 0);
+}
+
+function setView(view) {
+  currentView = view;
+  render();
+}
+
+// --- PWA Install ---
+let deferredPrompt = null;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  document.getElementById('install-banner').style.display = 'block';
+});
+
+document.getElementById('install-btn').addEventListener('click', async () => {
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    deferredPrompt = null;
+    hideBanner();
+  }
+});
+
+function hideBanner() {
+  document.getElementById('install-banner').style.display = 'none';
+  localStorage.setItem('install_banner_dismissed', '1');
+}
+
+// Hide banner if already dismissed
+if (localStorage.getItem('install_banner_dismissed')) {
+  document.getElementById('install-banner').style.display = 'none';
+}
+
+// Check if running as installed PWA
+if (window.matchMedia('(display-mode: standalone)').matches) {
+  document.getElementById('install-banner').style.display = 'none';
+}
+
+// --- Init ---
+loadData();
+todayDay = calcTodayDay();
+currentDay = todayDay;
+render();
+</script>
+
+</body>
+</html>
+unction resetDayData(day) {
+  appData.days[day] = {};
+  saveData();
+}
+
+// --- Render ---
+function render() {
+  document.getElementById('day-badge').textContent = 'День ' + currentDay;
+  document.getElementById('subtitle-text').textContent = 'Начало: ' + appData.startDate + ' · ' + COURSE_DAYS + ' дней';
+  document.getElementById('tab-day').className = 'tab' + (currentView === 'day' ? ' active' : '');
+  document.getElementById('tab-overview').className = 'tab' + (currentView === 'overview' ? ' active' : '');
+
+  const checked = getDayChecked(currentDay);
+  const done = ALL_PILL_IDS.filter(id => checked[id]).length;
+  const pct = Math.round(done / ALL_PILL_IDS.length * 100);
+  const fill = document.getElementById('progress-fill');
+  fill.style.width = pct + '%';
+  fill.style.background = pct === 100 ? '#22c55e' : 'linear-gradient(90deg,#f97316,#6366f1)';
+  document.getElementById('progress-label').textContent = pct === 100 ? '✅ Готово!' : pct + '%';
+
+  // Course progress: total pills taken across ALL days vs total possible
+  let totalDone = 0;
+  let completedDays = 0;
+  for (let d = 1; d <= COURSE_DAYS; d++) {
+    const dc = appData.days[d] || {};
+    const dayDone = ALL_PILL_IDS.filter(id => dc[id]).length;
+    totalDone += dayDone;
+    if (dayDone === ALL_PILL_IDS.length) completedDays++;
+  }
+  const totalPossible = ALL_PILL_IDS.length * COURSE_DAYS;
+  const coursePct = Math.round(totalDone / totalPossible * 100);
+  const courseFill = document.getElementById('course-fill');
+  courseFill.style.width = coursePct + '%';
+  courseFill.style.background = coursePct === 100 ? '#22c55e' : '#6366f1';
   document.getElementById('course-label').textContent = completedDays + ' / ' + COURSE_DAYS + ' дн · ' + coursePct + '%';
 
   if (currentView === 'day') renderDay();
